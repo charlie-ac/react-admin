@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { FC, memo, ReactNode } from 'react';
+import { ReactNode } from 'react';
 import PropTypes from 'prop-types';
 import get from 'lodash/get';
 import { Typography, SxProps } from '@mui/material';
@@ -11,7 +11,6 @@ import {
     LinkToType,
     ResourceContextProvider,
     RecordContextProvider,
-    RaRecord,
     useRecordContext,
     useCreatePath,
     Identifier,
@@ -22,7 +21,8 @@ import {
 
 import { LinearProgress } from '../layout';
 import { Link } from '../Link';
-import { PublicFieldProps, fieldPropTypes, InjectedFieldProps } from './types';
+import { FieldProps, fieldPropTypes } from './types';
+import { genericMemo } from './genericMemo';
 
 /**
  * Fetch reference record, and render its representation, or delegate rendering to child component.
@@ -55,9 +55,13 @@ import { PublicFieldProps, fieldPropTypes, InjectedFieldProps } from './types';
  * In previous versions of React-Admin, the prop `linkType` was used. It is now deprecated and replaced with `link`. However
  * backward-compatibility is still kept
  */
-export const ReferenceField: FC<ReferenceFieldProps> = props => {
+export const ReferenceField = <
+    RecordType extends Record<string, unknown> = Record<string, any>
+>(
+    props: ReferenceFieldProps<RecordType>
+) => {
     const { source, emptyText, ...rest } = props;
-    const record = useRecordContext(props);
+    const record = useRecordContext<RecordType>(props);
     const id = get(record, source);
     const translate = useTranslate();
 
@@ -72,7 +76,7 @@ export const ReferenceField: FC<ReferenceFieldProps> = props => {
             {...rest}
             emptyText={emptyText}
             record={record}
-            id={id}
+            id={id as Identifier}
         />
     );
 };
@@ -102,13 +106,11 @@ ReferenceField.defaultProps = {
     link: 'edit',
 };
 
-export interface ReferenceFieldProps<RecordType extends RaRecord = any>
-    extends PublicFieldProps,
-        InjectedFieldProps<RecordType> {
+export interface ReferenceFieldProps<
+    RecordType extends Record<string, unknown> = Record<string, any>
+> extends FieldProps<RecordType> {
     children?: ReactNode;
     reference: string;
-    resource?: string;
-    source: string;
     translateChoice?: Function | boolean;
     link?: LinkToType<RecordType>;
     sx?: SxProps;
@@ -118,9 +120,18 @@ export interface ReferenceFieldProps<RecordType extends RaRecord = any>
  * This intermediate component is made necessary by the useReference hook,
  * which cannot be called conditionally when get(record, source) is empty.
  */
-export const NonEmptyReferenceField: FC<
-    Omit<ReferenceFieldProps, 'source'> & { id: Identifier }
-> = ({ children, id, record, reference, link, ...props }) => {
+export const NonEmptyReferenceField = <
+    RecordType extends Record<string, any> = Record<string, any>
+>({
+    children,
+    id,
+    record,
+    reference,
+    link,
+    ...props
+}: Omit<ReferenceFieldProps<RecordType>, 'source'> & {
+    id: Identifier;
+}) => {
     const createPath = useCreatePath();
     const resourceDefinition = useResourceDefinition({ resource: reference });
 
@@ -140,10 +151,11 @@ export const NonEmptyReferenceField: FC<
 
     return (
         <ResourceContextProvider value={reference}>
-            <PureReferenceFieldView
+            {/* @ts-ignore */}
+            <PureReferenceFieldView<RecordType>
                 reference={reference}
                 {...props}
-                {...useReference({
+                {...useReference<RecordType>({
                     reference,
                     id,
                 })}
@@ -158,7 +170,11 @@ export const NonEmptyReferenceField: FC<
 // useful to prevent click bubbling in a datagrid with rowClick
 const stopPropagation = e => e.stopPropagation();
 
-export const ReferenceFieldView: FC<ReferenceFieldViewProps> = props => {
+export const ReferenceFieldView = <
+    RecordType extends Record<string, any> = Record<string, any>
+>(
+    props: ReferenceFieldViewProps<RecordType>
+) => {
     const {
         children,
         className,
@@ -235,19 +251,19 @@ ReferenceFieldView.propTypes = {
     translateChoice: PropTypes.oneOfType([PropTypes.func, PropTypes.bool]),
 };
 
-export interface ReferenceFieldViewProps
-    extends PublicFieldProps,
-        InjectedFieldProps,
+export interface ReferenceFieldViewProps<
+    RecordType extends Record<string, any> = Record<string, any>
+> extends FieldProps<RecordType>,
         UseReferenceResult {
+    children?: ReactNode;
     reference: string;
     resource?: string;
     translateChoice?: Function | boolean;
     resourceLinkPath?: string | false;
-    children?: ReactNode;
     sx?: SxProps;
 }
 
-const PureReferenceFieldView = memo(ReferenceFieldView);
+const PureReferenceFieldView = genericMemo(ReferenceFieldView);
 
 const PREFIX = 'RaReferenceField';
 
